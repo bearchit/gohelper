@@ -1,12 +1,13 @@
 package jsonhelper
 
 import (
-	"bytes"
 	"encoding/json"
 	"regexp"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/iancoleman/strcase"
 )
+
+type CaseReplacer func(string) string
 
 type caseMarshaller struct {
 	Replacer CaseReplacer
@@ -19,14 +20,14 @@ var (
 
 func NewSnakeCaseMarshaller(v interface{}) *caseMarshaller {
 	return &caseMarshaller{
-		Replacer: toSnakeCase,
+		Replacer: strcase.ToSnake,
 		Value:    v,
 	}
 }
 
 func NewLowerCamelCaseMarshaller(v interface{}) *caseMarshaller {
 	return &caseMarshaller{
-		Replacer: toLowerCamelCase,
+		Replacer: strcase.ToLowerCamel,
 		Value:    v,
 	}
 }
@@ -39,27 +40,15 @@ func (c caseMarshaller) MarshalJSON() ([]byte, error) {
 
 	converted := keyMatchRegex.ReplaceAllFunc(
 		marshalled,
-		c.Replacer,
+		func(match []byte) []byte {
+			matcher := regexp.MustCompile(`(\w+)`)
+			replaced := []byte(c.Replacer(string(matcher.Find(match))))
+			return matcher.ReplaceAll(
+				match,
+				replaced,
+			)
+		},
 	)
 
 	return converted, err
-}
-
-type CaseReplacer func([]byte) []byte
-
-func toSnakeCase(match []byte) []byte {
-	matcher := regexp.MustCompile(`(\w)([A-Z])`)
-	return bytes.ToLower(matcher.ReplaceAll(
-		match,
-		[]byte(`${1}_${2}`),
-	))
-}
-
-func toLowerCamelCase(match []byte) []byte {
-	if len(match) > 2 {
-		r, width := utf8.DecodeRune(match[1:])
-		r = unicode.ToLower(r)
-		utf8.EncodeRune(match[1:width+1], r)
-	}
-	return match
 }
